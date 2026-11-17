@@ -63,6 +63,9 @@ canvas{display:block;width:100%;height:100%;cursor:none;outline:none}
 .rrow button{padding:4px 12px;font-size:15px}
 .lrow{display:grid;grid-template-columns:34px 1fr auto auto;gap:8px;align-items:center;padding:3px 0;border-bottom:1px dashed #c9d0e6;font-size:15px}
 .lrow i{color:#777;font-size:13px;font-style:normal}
+#bandRow{align-items:center;gap:6px}
+.bsw{width:28px;height:28px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px #1b2a6b;cursor:pointer;padding:0}
+.bsw.on{box-shadow:0 0 0 3px #1b2a6b,0 0 0 6px #fbf7ea,0 0 0 8px #1b2a6b;transform:scale(1.1)}
 #menuBtn{position:fixed;top:10px;right:10px;z-index:40;font:14px Georgia,serif;padding:5px 10px;border:2px solid #1b2a6b;border-radius:8px;background:#fff;color:#1b2a6b;cursor:pointer;display:none}
 </style>
 </head>
@@ -85,6 +88,7 @@ canvas{display:block;width:100%;height:100%;cursor:none;outline:none}
   <h1>PAPER HORDE</h1>
   <p class="sub">Bandanalı çöp adam, karate ve kareli kağıt</p>
   <div class="row"><input id="nm" maxlength="12" placeholder="Adın"></div>
+  <div class="row" id="bandRow"><span style="font-size:15px;align-self:center">Bandana:</span></div>
   <div class="row" id="dkRow"><button data-d="easy">Kolay</button><button data-d="normal">Normal</button><button data-d="hard">Zor</button></div>
 <div class="row"><button id="bSolo">Tek başına oyna</button><button id="bHost">Oda kur</button></div>
   <p class="sub" id="padInfo" style="display:none">🎮 Oyun kolu bağlı — A: zıpla · X: yumruk · B: tekme · Y: kafa · LB: silahı al · RB: atıl · tetikler ve yön tuşları: ninja hareketleri</p>
@@ -106,6 +110,8 @@ canvas{display:block;width:100%;height:100%;cursor:none;outline:none}
 // ---------- temel ----------
 const A=.8,B=.4,W=1900,GW=2*W*A,GH=2*W*B,D=Math.PI/180;
 const PS=1.4,ZS=1.2,PAPER='#fbf7ea',INK='#1b2a6b',DESK='#6b4a2f',BAND='#d7262f',SHOE='#262626';
+const BANDS=['#d7262f','#2563eb','#16a34a','#f97316','#8b2fd1','#eab308','#ec4899','#222222'];
+const bandOk=c=>BANDS.includes(c)?c:BAND;
 const COLS=['#1b2a6b','#a3231f','#1f7a3a','#7a2c8f','#b35c00','#0d7377'];
 const $=id=>document.getElementById(id);
 const cv=$('c'),ctx=cv.getContext('2d');
@@ -1581,8 +1587,8 @@ function applyEv(ev){
 function snapshot(){
   const z=[];for(const q of zombies)z.push(q.id,q.x|0,q.y|0,q.type,q.z|0);
   const mv=Math.hypot(P.vx,P.vy)>40?1:0;
-  const p=[['h',P.x|0,P.y|0,+P.aim.toFixed(2),P.hp|0,P.z|0,mv,P.dead?1:0,0,P.name]];
-  for(const[id,o]of others)p.push([id,o.tx|0,o.ty|0,o.aim,o.hp,o.tz|0,o.mv,o.dead?1:0,o.ci,o.name]);
+  const p=[['h',P.x|0,P.y|0,+P.aim.toFixed(2),P.hp|0,P.z|0,mv,P.dead?1:0,0,P.name,P.band]];
+  for(const[id,o]of others)p.push([id,o.tx|0,o.ty|0,o.aim,o.hp,o.tz|0,o.mv,o.dead?1:0,o.ci,o.name,o.band]);
   const b=[];for(const bz of zombies)if(bz.boss&&!bz.dead)b.push([bz.id,BOSSK.indexOf(bz.bk),bz.hp,bz.max,bz.mode||'',+(bz.e||0).toFixed(2),+(bz.aa||0).toFixed(2),bz.jz|0,+(bz.open||0).toFixed(2),+(bz.spinA||0).toFixed(1),bz.tx2|0,bz.ty2|0]);
   return{t:'s',wave,left:toSpawn,score,z,p,b,sb:scoreLog.splice(0)};
 }
@@ -1599,7 +1605,7 @@ function onHostData(c,m){
   if(m.t==='hello'){
     if(others.size>=MAXP-1){send(c,{t:'full'});setTimeout(()=>{try{c.close()}catch(e){}},400);return}
     const used=new Set([0]);for(const o of others.values())used.add(o.ci);let ci=1;while(used.has(ci))ci++;
-    others.set(id,mkRemote(ci,m.name));net.conns.set(id,c);
+    const ro=mkRemote(ci,m.name);ro.band=bandOk(m.band);others.set(id,ro);net.conns.set(id,c);
     send(c,{t:'welcome',id,ci,wave,score,objs:objData()});
     updateChip();return;
   }
@@ -1638,7 +1644,7 @@ function onClientData(m){
     const ids=new Set();
     for(const a of m.p){if(a[0]===net.id)continue;ids.add(a[0]);let o=others.get(a[0]);
       if(!o){o=mkRemote(a[8],a[9]);o.x=a[1];o.y=a[2];others.set(a[0],o)}
-      o.tx=a[1];o.ty=a[2];o.aim=a[3];o.hp=a[4];o.tz=a[5];o.mv=a[6];o.dead=!!a[7]}
+      o.tx=a[1];o.ty=a[2];o.aim=a[3];o.hp=a[4];o.tz=a[5];o.mv=a[6];o.dead=!!a[7];o.band=bandOk(a[10])}
     for(const id of [...others.keys()])if(!ids.has(id))others.delete(id);
     updateChip();
   }
@@ -1736,7 +1742,7 @@ function joinRoom(code){
   const to=setTimeout(()=>{if(!ok){leaveNet();menuMsg('Bağlanılamadı. Kod doğru mu, oda sahibi açık mı?')}},12000);
   peer.on('open',()=>{
     const c=peer.connect('defterz-'+code,{reliable:true,serialization:'json'});net.hc=c;
-    c.on('open',()=>{ok=true;clearTimeout(to);net.mode='client';net.code=code;net.lastS=performance.now();menuMsg('');setBusy(false);send(c,{t:'hello',name:P.name})});
+    c.on('open',()=>{ok=true;clearTimeout(to);net.mode='client';net.code=code;net.lastS=performance.now();menuMsg('');setBusy(false);send(c,{t:'hello',name:P.name,band:P.band})});
     c.on('data',onClientData);
     c.on('close',()=>{if(net.mode==='client')backToMenu('Bağlantı koptu (oda sahibi çıktı).')});
   });
@@ -2108,10 +2114,10 @@ function drawPlayer(p){
   const atk=!!(a&&(MV[a.id].hit||MV[a.id].air||MV[a.id].say));
   const tails=()=>{const kn=J.knot;let tx=-J.fw[0],ty=-J.fw[1]*.6;if(Math.abs(tx)<.35)tx=tx>=0?.35:-.35;
     const spd=(moving?6:0)+(z>3?10:0)+(a?5:0),wv=Math.sin(time*13+p.sid);
-    ctx.strokeStyle=BAND;ctx.lineWidth=2.6;ctx.beginPath();
+    ctx.strokeStyle=p.band||BAND;ctx.lineWidth=2.6;ctx.beginPath();
     ctx.moveTo(kn[0],kn[1]);ctx.quadraticCurveTo(kn[0]+tx*(7+spd*.5),kn[1]+ty*7+1+wv*3,kn[0]+tx*(14+spd),kn[1]+ty*14+4+wv*2);
     ctx.moveTo(kn[0],kn[1]);ctx.quadraticCurveTo(kn[0]+tx*(6+spd*.4),kn[1]+ty*6+5-wv*2,kn[0]+tx*(11+spd*.8),kn[1]+ty*11+9+Math.cos(time*11+p.sid)*2.5);
-    ctx.stroke();ctx.fillStyle=BAND;ctx.beginPath();ctx.arc(kn[0],kn[1],2.3,0,6.3);ctx.fill()};
+    ctx.stroke();ctx.fillStyle=p.band||BAND;ctx.beginPath();ctx.arc(kn[0],kn[1],2.3,0,6.3);ctx.fill()};
   const torsoHead=()=>{
     ctx.globalAlpha=ga;ctx.strokeStyle=col;ctx.lineWidth=2.9;ctx.beginPath();
     wl(J.hip[0],J.hip[1],J.sh[0],J.sh[1]);wl(J.sh[0],J.sh[1],hx-(hx-J.sh[0])*.3,hy-(hy-J.sh[1])*.3);ctx.stroke();
@@ -2120,7 +2126,7 @@ function drawPlayer(p){
     if(behind)tails();
     ctx.fillStyle=PAPER;ctx.beginPath();ctx.arc(hx,hy,r,0,6.3);ctx.fill();
     ctx.save();ctx.translate(hx,hy);ctx.rotate(J.ht*D*.7*J.c);
-    ctx.beginPath();ctx.arc(0,0,r+.5,0,6.3);ctx.clip();ctx.fillStyle=BAND;ctx.fillRect(-r-1,-6.2,2*r+2,4.2);ctx.restore();
+    ctx.beginPath();ctx.arc(0,0,r+.5,0,6.3);ctx.clip();ctx.fillStyle=p.band||BAND;ctx.fillRect(-r-1,-6.2,2*r+2,4.2);ctx.restore();
     ctx.strokeStyle=col;ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(hx+jr(),hy+jr(),r,0,6.3);ctx.stroke();
     // yüz: sadece kameraya bakan taraf görünür
     ctx.fillStyle=col;ctx.strokeStyle=col;ctx.lineWidth=1.3;
@@ -2486,6 +2492,9 @@ function readName(){let n=$('nm').value.trim().slice(0,12)||'Oyuncu';P.name=n;tr
 $('bSolo').addEventListener('click',()=>{initAudio();readName();leaveNet();startGame()});
 document.querySelectorAll('#dkRow button').forEach(b=>b.addEventListener('click',()=>setDiff(b.dataset.d)));
 try{setDiff(localStorage.getItem('dz_diff')||'normal')}catch(e){setDiff('normal')}
+function setBand(c){P.band=bandOk(c);try{localStorage.setItem('dz_band',P.band)}catch(e){}document.querySelectorAll('.bsw').forEach(b=>b.classList.toggle('on',b.dataset.c===P.band))}
+for(const c of BANDS){const b=document.createElement('button');b.className='bsw';b.dataset.c=c;b.style.background=c;b.title='Bandana rengi';b.onclick=()=>setBand(c);$('bandRow').appendChild(b)}
+try{setBand(localStorage.getItem('dz_band')||BAND)}catch(e){setBand(BAND)}
 lob.board=lbMerge([],lbLocal());renderBoard();renderRooms();
 $('bLb').addEventListener('click',()=>{const el=$('lbBox');el.style.display=el.style.display==='none'?'':'none';renderBoard()});
 setTimeout(lobbyStart,300);
