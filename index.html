@@ -174,7 +174,7 @@ const DIFFS={easy:{cnt:.6,hp:.7,boss:.75,mult:.7,name:'Kolay'},normal:{cnt:1,hp:
 let DIFF=DIFFS.normal,DIFFK='normal',DENS=1;
 function setDens(v){DENS=clamp(Math.round((+v||1)*4)/4,.5,3);try{localStorage.setItem('dz_dens',DENS)}catch(e){}const sl=$('dens');if(sl)sl.value=DENS;const t=$('densV');if(t)t.textContent='×'+DENS+(DENS>=2.5?' (çok kalabalık)':DENS<=.75?' (seyrek)':'')}
 // ---------- puanlama ----------
-let scoreLog=[],pageT=0,pageHurt=0,lastHpS=100,lastRank=0,submitted=false;
+let gameT0=0,scoreLog=[],pageT=0,pageHurt=0,lastHpS=100,lastRank=0,submitted=false;
 function addScore(n,label,x,y,col){n=Math.round(n*DIFF.mult);if(n<=0)return;score+=n;
   if(label){if(x!=null)word(x,y,'+'+n+' '+label,false,null,col||'#1f7a3a');if(net.mode==='host')scoreLog.push([x|0,y|0,n,label])}}
 function setDiff(k){DIFF=DIFFS[k]||DIFFS.normal;DIFFK=DIFFS[k]?k:'normal';try{localStorage.setItem('dz_diff',k)}catch(e){}
@@ -673,7 +673,7 @@ function resetPlayer(){
     airF:false,airS:false,land:0,dashCd:0,inv:1,flash:0,trail:[],ltr:[],gh:[],cd:[0,0,0,0],pose:null,dead:false,clonesT:0,sakuraT:0,petals:[]});
 }
 resetPlayer();
-function startGame(){submitted=false;lastRank=0;
+function startGame(){submitted=false;lastRank=0;gameT0=performance.now();
   wave=1;score=0;combo=0;overT=0;resetPlayer();newPage(true,false);
   $('menu').style.display='none';cv.focus();
 }
@@ -1307,7 +1307,7 @@ function hurt(z,d,kx,ky,lift,stun){
     if(z.jugN>=2&&!VIS)word(z.x,z.y,'HAVADA ×'+z.jugN+'!',z.jugN>=3,null,'#ff6a00')}
   if(z.boss&&d>0)addScore(Math.min(d,z.hp+d)*2);
   if(z.hp<=0){if(d>=5)bigKill=true;hs=Math.max(hs,.06);z.dead=true;
-    if(!z.boss){const base={0:10,1:15,2:50,3:15,4:30,5:15}[z.type]||10,cm=1+Math.floor(combo/10)*.5;let pts=base*cm,lab=null;
+    if(!z.boss){const base={0:10,1:15,2:50,3:15,4:30,5:15}[z.type]||10,cm=Math.min(4,1+Math.floor(combo/10)*.5);let pts=base*cm,lab=null;
       if(z.z>12){pts*=1.5;lab='HAVADA'}
       if(d>=50&&!lab){pts+=25;lab='İNFAZ'}
       if(z.burn>0&&!lab){pts+=5;lab='YANDI'}
@@ -1665,24 +1665,33 @@ function backToMenu(msg){if((state==='play'||state==='flip')&&net.mode!=='client
 const LOBBY_ID='paperhorde-lobby-v1',LB_KEY='ph_lb';
 const lob={peer:null,conn:null,hub:false,rooms:new Map(),list:[],board:[],hubConns:new Set(),regT:0,state:'yok'};
 function lbLocal(){try{return JSON.parse(localStorage.getItem(LB_KEY)||'[]')}catch(e){return[]}}
-function lbClean(e){if(!e||typeof e!=='object')return null;const s2=Math.round(+e.s);if(!(s2>0&&s2<5e7))return null;
-  return{n:String(e.n||'Oyuncu').slice(0,40),s:s2,w:Math.max(1,Math.min(999,+e.w|0)),d:DIFFS[e.d]?e.d:'normal',t:+e.t||0,id:String(e.id||'').slice(0,24)}}
+// skor tavanı: ulaşılan sayfa ve oynanan süreye göre (cömert sınırlar; kaba hileleri eler)
+function lbCap(w){return 20000*w+4000*w*w}
+function lbPlausible(e){const w=+e.w|0,s2=+e.s,u=+e.u;
+  if(!(w>=1&&w<=200&&s2>0))return false;if(s2>lbCap(w))return false;
+  if(!(u>=10&&u<=86400))return false;if(s2>u*700)return false;
+  if(u<w*15)return false;                                    // bir sayfa 15 saniyeden kısa sürmez
+  if(e.t&&e.t>Date.now()+864e5)return false;return true}
+function lbClean(e){if(!e||typeof e!=='object')return null;const s2=Math.round(+e.s);
+  const c={n:String(e.n||'Oyuncu').slice(0,40),s:s2,w:Math.max(1,Math.min(999,+e.w|0)),d:DIFFS[e.d]?e.d:'normal',t:+e.t||0,u:Math.round(+e.u||0),id:String(e.id||'').slice(0,24)};
+  return lbPlausible(c)?c:null}
 function lbMerge(a,b){const m=new Map();for(const e of[...a,...b]){const c=lbClean(e);if(c)m.set(c.id||(c.n+c.s+c.t),c)}
   return[...m.values()].sort((x,y)=>y.s-x.s).slice(0,50)}
 function lbSet(b){lob.board=lbMerge(lob.board,b);try{localStorage.setItem(LB_KEY,JSON.stringify(lob.board))}catch(e){}renderBoard()}
 function submitScore(){if(submitted||score<=0)return;submitted=true;
   const names=[P.name||'Oyuncu',...[...others.values()].map(o=>o.name||'Oyuncu')].join(' + ');
-  const e={n:names,s:score,w:wave,d:DIFFK,t:Date.now(),id:Math.random().toString(36).slice(2,12)};
+  const e={n:names,s:score,w:wave,d:DIFFK,t:Date.now(),u:Math.round((performance.now()-(gameT0||performance.now()))/1000),id:Math.random().toString(36).slice(2,12)};
+  if(!lbPlausible(e)){submitted=true;return}
   lbSet([e]);lastRank=lob.board.findIndex(q=>q.id===e.id)+1;
   if(lob.hub)hubBroadcast({t:'board',board:lob.board});else if(lob.conn&&lob.conn.open)lob.conn.send({t:'score',e})}
 function hubBroadcast(m){for(const c of lob.hubConns)try{if(c.open)c.send(m)}catch(e){}}
 function hubRooms(){const now=Date.now();for(const[k,r]of lob.rooms)if(now-r.t>12000)lob.rooms.delete(k);
   lob.list=[...lob.rooms.values()].map(r=>({code:r.code,host:r.host,n:r.n,max:r.max,wave:r.wave,d:r.d,x:r.x||1}));renderRooms()}
 function hubMsg(c,d){if(!d||typeof d!=='object')return;
-  if(d.t==='hi'){if(Array.isArray(d.board))lbSet(d.board.slice(0,50));try{c.send({t:'rooms',list:lob.list});c.send({t:'board',board:lob.board})}catch(e){}hubBroadcast({t:'board',board:lob.board})}
+  if(d.t==='hi'){if(c.hiDone)return;c.hiDone=1;if(Array.isArray(d.board))lbSet(d.board.slice(0,50));try{c.send({t:'rooms',list:lob.list});c.send({t:'board',board:lob.board})}catch(e){}hubBroadcast({t:'board',board:lob.board})}
   else if(d.t==='reg'&&/^[A-Z0-9]{4}$/.test(d.code)){lob.rooms.set(d.code,{code:d.code,host:String(d.host||'').slice(0,12),n:Math.max(1,Math.min(9,d.n|0)),max:MAXP,wave:Math.max(1,d.wave|0),d:DIFFS[d.d]?d.d:'normal',x:clamp(+d.x||1,.5,3),t:Date.now(),c});hubRooms();hubBroadcast({t:'rooms',list:lob.list})}
   else if(d.t==='unreg'){const r=lob.rooms.get(d.code);if(r&&r.c===c){lob.rooms.delete(d.code);hubRooms();hubBroadcast({t:'rooms',list:lob.list})}}
-  else if(d.t==='score'){const e=lbClean(d.e);if(e){lbSet([e]);hubBroadcast({t:'board',board:lob.board})}}}
+  else if(d.t==='score'){const now=Date.now();if(now-(c.lastSc||0)<20000)return;c.lastSc=now;const e=lbClean(d.e);if(e){lbSet([e]);hubBroadcast({t:'board',board:lob.board})}}}
 function lobbyStart(){if(!window.Peer||lob.peer)return;lob.state='bağlanıyor';renderRooms();
   let pr;try{pr=mkPeer(LOBBY_ID)}catch(e){lob.state='yok';renderRooms();return}lob.peer=pr;
   pr.on('open',()=>{lob.hub=true;lob.state='hazır';lbSet(lbLocal());
@@ -2412,7 +2421,7 @@ function drawFlip(){
 let last=0;
 function frame(t){
   if(window.__paused){padPoll();const pd=Math.min(.033,(t-last)/1000||0);last=t;if(net.mode!=='solo'&&(state==='play'||state==='dead'))netTick(pd);render();requestAnimationFrame(frame);return}
-  const rdt=Math.min(.033,(t-last)/1000||0)*(window.__slow||1);last=t;
+  const rdt=Math.min(.033,(t-last)/1000||0);last=t;
   if(slowT>0){slowT-=rdt;tscale=.28}else tscale=1;
   const dt=rdt*tscale;time+=dt;fdt=dt;
   padPoll();lobbyTick(rdt);
@@ -2519,7 +2528,7 @@ try{const q=new URLSearchParams(location.search).get('oda');if(q){$('code').valu
 M.x=VW/2;M.y=VH/2;drawPaper();
 if(document.fonts&&document.fonts.load)document.fonts.load(F(30)).then(()=>{if(state==='menu')drawPaper()}).catch(()=>{});
 requestAnimationFrame(frame);
-window.__dz={backToMenu,P,M,K,net,others,MV,MOCM,press,trySkill,startAct,cineShot,setHit:n=>{hitN=n;hitT=1.4;hitPop=1},cineT:()=>cine.t,dbgStats:()=>wStats(drawType,strokes.map(st=>{const a=[];for(const q of st)a.push(clamp(Math.round(q[0]/BOXW*255),0,255),clamp(Math.round(q[1]/BOXH*255),0,255));return a})),get state(){return state},get zombies(){return zombies},get wave(){return wave},get score(){return score},get objs(){return objs},get pools(){return pools},BOSS,bossHit,bossShot,bossRect,bossObj,get bobjs(){return bobjs},assnTarget,picksN:()=>picks.length,dbgStrokes:()=>strokes.reduce((t,q)=>t+q.length,0),get bshots(){return bshots},clearWave:()=>{toSpawn=0;for(const z of zombies)z.dead=true;zombies=[]},mkZombie,hurtDbg:hurt,get spits(){return spits},dbg:()=>({toSpawn,hostWait,bossUp,bossDone,bossT:+bossT.toFixed(1),localDone,drawT:+drawT.toFixed(1),spawnT:+spawnT.toFixed(1)})};
+window.__ph=Object.freeze({get state(){return state},get mode(){return net.mode},get code(){return net.code},names:()=>[P.name||'Oyuncu',...[...others.values()].map(o=>o.name||'Oyuncu')],backToMenu:m=>backToMenu(m)});
 })();
 </script>
 <button id="menuBtn">☰ Menü (Esc)</button>
@@ -2527,19 +2536,18 @@ window.__dz={backToMenu,P,M,K,net,others,MV,MOCM,press,trySkill,startAct,cineSho
 <div class="row2"><button id="pzGo">Devam et</button><button id="pzMenu" class="red">Menüye dön</button></div><p style="font-size:13px;color:#666;margin:8px 0 0">Kol: Options / ✕ = devam • △ = menüye dön</p></div></div>
 <script>
 let paused=false,pzTimer=null;
-function refreshPz(){const d=window.__dz;if(!d)return;const list=document.getElementById('pzList');
-  const names=[[d.P.name||'Oyuncu','(sen)']];
-  for(const o of d.others.values())names.push([o.name||'Oyuncu','']);
+function refreshPz(){const d=window.__ph;if(!d)return;const list=document.getElementById('pzList');
+  const names=d.names().map((n,i)=>[n,i?'':'(sen)']);
   list.innerHTML='';for(const [n,tag] of names){const li=document.createElement('li');const a=document.createElement('span');a.textContent=n;const b=document.createElement('i');b.textContent=tag;li.append(a,b);list.appendChild(li)}
-  document.getElementById('pzCode').textContent=d.net.mode==='solo'?'Tek başına oynuyorsun':'Oda kodu: '+d.net.code+' • '+names.length+' oyuncu';
+  document.getElementById('pzCode').textContent=d.mode==='solo'?'Tek başına oynuyorsun':'Oda kodu: '+d.code+' • '+names.length+' oyuncu';
 }
-function setPause(on){const d=window.__dz;if(!d)return;if(on&&!(d.state==='play'||d.state==='dead'))return;paused=on;window.__paused=on;
+function setPause(on){const d=window.__ph;if(!d)return;if(on&&!(d.state==='play'||d.state==='dead'))return;paused=on;window.__paused=on;
   document.getElementById('pz').classList.toggle('on',on);if(on){refreshPz();clearInterval(pzTimer);pzTimer=setInterval(refreshPz,500)}else clearInterval(pzTimer)}
 window.togglePause=()=>setPause(!paused);
 document.getElementById('menuBtn').onclick=()=>setPause(!paused);
 document.getElementById('pzGo').onclick=()=>setPause(false);
-document.getElementById('pzMenu').onclick=()=>{setPause(false);window.__dz.backToMenu('')};
-setInterval(()=>{const d=window.__dz;if(!d)return;document.getElementById('menuBtn').style.display=(d.state==='play'||d.state==='dead'||d.state==='flip')?'':'none'},300);
+document.getElementById('pzMenu').onclick=()=>{setPause(false);window.__ph.backToMenu('')};
+setInterval(()=>{const d=window.__ph;if(!d)return;document.getElementById('menuBtn').style.display=(d.state==='play'||d.state==='dead'||d.state==='flip')?'':'none'},300);
 </script>
 </body>
 </html>
