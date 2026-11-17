@@ -94,7 +94,7 @@ canvas{display:block;width:100%;height:100%;cursor:none;outline:none}
   <div class="row" id="densRow"><label for="dens" style="font-size:15px">Düşman yoğunluğu</label><input type="range" id="dens" min="0.5" max="3" step="0.25" value="1"><b id="densV" style="font-size:15px;min-width:120px;text-align:left">×1</b></div>
   <div class="row" id="dkRow"><button data-d="easy">Kolay</button><button data-d="normal">Normal</button><button data-d="hard">Zor</button></div>
 <div class="row"><button id="bSolo">Tek başına oyna</button><button id="bHost">Oda kur</button></div>
-  <p class="sub" id="padInfo" style="display:none">🎮 Oyun kolu bağlı — A: zıpla · X: yumruk · B: tekme · Y: kafa · LB: silahı al · RB: atıl · tetikler ve yön tuşları: ninja hareketleri</p>
+  <p class="sub" id="padInfo" style="display:none">🎮 Oyun kolu bağlı — Options/Start: duraklat ve menü · A: zıpla · X: yumruk · B: tekme · Y: kafa · LB: silahı al · RB: atıl · tetikler ve yön tuşları: ninja hareketleri</p>
   <div class="row"><input id="code" maxlength="4" placeholder="KOD"><button id="bJoin">Odaya katıl</button></div>
   <div id="roomBox"><h3>Açık odalar</h3><div id="rooms"></div></div>
   <div class="row"><button id="bLb">🏆 Liderlik tablosu</button></div>
@@ -2411,7 +2411,7 @@ function drawFlip(){
 // ---------- döngü ----------
 let last=0;
 function frame(t){
-  if(window.__paused){const pd=Math.min(.033,(t-last)/1000||0);last=t;if(net.mode!=='solo'&&(state==='play'||state==='dead'))netTick(pd);render();requestAnimationFrame(frame);return}
+  if(window.__paused){padPoll();const pd=Math.min(.033,(t-last)/1000||0);last=t;if(net.mode!=='solo'&&(state==='play'||state==='dead'))netTick(pd);render();requestAnimationFrame(frame);return}
   const rdt=Math.min(.033,(t-last)/1000||0)*(window.__slow||1);last=t;
   if(slowT>0){slowT-=rdt;tscale=.28}else tscale=1;
   const dt=rdt*tscale;time+=dt;fdt=dt;
@@ -2454,6 +2454,8 @@ function padPoll(){
   if(state==='menu'){if(edge(0)||edge(9))$('bSolo').click();return}
   if(state==='dead'){if(edge(0)||edge(9))startGame();return}
   if(drawOpen){if(edge(0))closeDraw(true);if(edge(1))closeDraw(false);return}
+  if(window.__paused){if(edge(9)||edge(0))window.togglePause();else if(edge(3)){window.togglePause();backToMenu('')}return}
+  if(state==='play'&&edge(9)){window.togglePause&&window.togglePause();return}
   for(const i in PADB)if(edge(+i))press(PADB[i]);
   if(edge(4))pickUp();                       // LB: silahı al
   if(down(5)&&!pad._d){pad._d=true;K._dash=true}else if(!down(5))pad._d=false;   // RB: atılma
@@ -2522,7 +2524,7 @@ window.__dz={backToMenu,P,M,K,net,others,MV,MOCM,press,trySkill,startAct,cineSho
 </script>
 <button id="menuBtn">☰ Menü (Esc)</button>
 <div id="pz"><div id="pzb"><h2>Duraklatıldı</h2><p class="code" id="pzCode"></p><ul id="pzList"></ul>
-<div class="row2"><button id="pzGo">Devam et</button><button id="pzMenu" class="red">Menüye dön</button></div></div></div>
+<div class="row2"><button id="pzGo">Devam et</button><button id="pzMenu" class="red">Menüye dön</button></div><p style="font-size:13px;color:#666;margin:8px 0 0">Kol: Options / ✕ = devam • △ = menüye dön</p></div></div>
 <script>
 let paused=false,pzTimer=null;
 function refreshPz(){const d=window.__dz;if(!d)return;const list=document.getElementById('pzList');
