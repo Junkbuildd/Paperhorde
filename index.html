@@ -2283,10 +2283,13 @@ function drawWavesGround(){
     ctx.strokeStyle='rgba(27,42,107,.3)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(w.x-w.c*75,w.y-w.s*75,80,a-.6,a+.6);ctx.stroke()}
   ctx.globalAlpha=1;
 }
+// ölünce kamera hayattaki takım arkadaşını izler
+function camTarget(){if(!P.dead||net.mode==='solo')return P;for(const o of others.values())if(!o.dead)return o;return P}
 function render(){
   boil=Math.floor(time*7);
-  const g=gp(P.x,P.y),lx=(M.x/Z-vw/2)*.14,ly=(M.y/Z-vh/2)*.14;
-  cam.x+=(g[0]+lx-cam.x)*.14;cam.y+=(g[1]-(P.z||0)*.3+ly-cam.y)*.14;
+  const ct=camTarget(),spec=ct!==P;
+  const g=gp(ct.x,ct.y),lx=spec?0:(M.x/Z-vw/2)*.14,ly=spec?0:(M.y/Z-vh/2)*.14,ck=spec?.08:.14;
+  cam.x+=(g[0]+lx-cam.x)*ck;cam.y+=(g[1]-(ct.z||0)*.3+ly-cam.y)*ck;
   ZC=Z*(1+zp);zW=ZC;const vwE=VW/ZC,vhE=VH/ZC;
   const sh=shake;ox=vwE/2-cam.x+R(-sh,sh);oy=vhE/2-cam.y+R(-sh,sh);
   ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=DESK;ctx.fillRect(0,0,cv.width,cv.height);
@@ -2418,9 +2421,16 @@ function hud(){
     else if(lastRank)txt((lastNew?'Yeni rekor! ':'En iyin '+lastBest+' • ')+'Genel sıralamada '+lastRank+'. sıra',vw/2,vh/2+40,24,'#1f7a3a','center');
     txt('Tekrar için tıkla',vw/2,vh/2+82,30,'#333','center');
   }else if(P.dead){
-    ctx.fillStyle='rgba(251,247,234,.88)';ctx.fillRect(vw/2-300,vh/2-90,600,150);
-    txt('SİLİNDİN!',vw/2,vh/2-25,64,'#c22630','center');
-    txt(allDead()?'Herkes silindi — 1. sayfadan yeniden başlıyor…':'Sayfa çevrilince geri çizileceksin',vw/2,vh/2+30,28,INK,'center');
+    const ct=camTarget();
+    if(ct!==P){                                   // izleme modu: üstte küçük bilgi, ortası açık
+      const yb=vh-170;ctx.fillStyle='rgba(251,247,234,.9)';ctx.fillRect(vw/2-280,yb,560,78);
+      txt('SİLİNDİN — '+(ct.name||'Takım arkadaşın')+' izleniyor',vw/2,yb+30,30,'#c22630','center');
+      txt('Sayfa çevrilince geri çizileceksin',vw/2,yb+62,22,INK,'center');
+    }else{
+      ctx.fillStyle='rgba(251,247,234,.88)';ctx.fillRect(vw/2-300,vh/2-90,600,150);
+      txt('SİLİNDİN!',vw/2,vh/2-25,64,'#c22630','center');
+      txt(allDead()?'Herkes silindi — 1. sayfadan yeniden başlıyor…':'Sayfa çevrilince geri çizileceksin',vw/2,vh/2+30,28,INK,'center');
+    }
   }
   if(net.lag){ctx.fillStyle='rgba(251,247,234,.9)';ctx.fillRect(vw/2-310,60,620,40);txt('Oda sahibi bekleniyor… (sekmesi arka planda olabilir)',vw/2,88,24,'#c22630','center')}
   const mx=M.x/Z,my=M.y/Z;ctx.strokeStyle='rgba(194,38,48,.8)';ctx.lineWidth=2;ctx.beginPath();
