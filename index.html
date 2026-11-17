@@ -121,13 +121,13 @@ const cv=$('c'),ctx=cv.getContext('2d');
 const gc=document.createElement('canvas');gc.width=GW;gc.height=GH;const g2=gc.getContext('2d');
 const snap=document.createElement('canvas');const sctx=snap.getContext('2d');
 let VW=0,VH=0,DPR=1,Z=1,vw=0,vh=0,ox=0,oy=0;
-let REM=false,ZC=1,zW=1,zp=0,flashA=0,tscale=1,slowT=0,hitN=0,hitT=0,hitPop=0,rags=[],killsNow=0,bigKill=false;
+let mkCd=0,REM=false,ZC=1,zW=1,zp=0,flashA=0,tscale=1,slowT=0,hitN=0,hitT=0,hitPop=0,rags=[],killsNow=0,bigKill=false;
 // sinematik an: t ilerler, dir dönüş yönü, cd bekleme
 let cine={t:0,dur:0,dir:1,cd:0,lines:0};
 function cineShot(dur,why){
   if(cine.cd>0||cine.t>0||state!=='play')return;
-  cine={t:.0001,dur:dur,dir:Math.random()<.5?-1:1,cd:11+Math.random()*6,lines:1};
-  if(net.mode!=='client')slowT=Math.max(slowT,dur*.82);   // ağır çekim yalnız otoritede
+  cine={t:.0001,dur:dur,dir:Math.random()<.5?-1:1,cd:24+Math.random()*10,lines:1};
+  if(net.mode!=='client')slowT=Math.max(slowT,dur*.6);   // ağır çekim yalnız otoritede
   zp=Math.max(zp,.1);flashA=Math.max(flashA,.2);
   if(why)word(P.x,P.y,why,true,P);
 }
@@ -247,7 +247,7 @@ const MV={
     upd(p,a){const u=a.t/a.dur,v=u<.25?280:980;p.vx=Math.cos(a.a0)*v;p.vy=Math.sin(a.a0)*v;
       if(u>.3){if(u<.4)p.trail.push({x:p.x,y:p.y,l:.15});
         if(fireHC(p,p.x+Math.cos(a.a0)*34,p.y+Math.sin(a.a0)*34,52,6,640,a.set,230,.5)){hitWord(a,p,'ÇAT!');flashA=Math.max(flashA,.12);zp=Math.max(zp,.05);
-          if(p===P&&Math.random()<.5)cineShot(.8)}}}},
+          if(p===P&&Math.random()<.15)cineShot(.7)}}}},
   spin:{air:1,ctl:1,dur:.52,g:.28,limb:'ff',moc:'kflip',snd:350,say:'DÖNER TEKME!',pose:spinPose(PO.spin,2,12),
     start(p,a){p.vz=Math.max(p.vz,320);a.tick=0},
     upd(p,a,dt){const k=Math.exp(-3*dt);p.vx*=k;p.vy*=k;a.tick-=dt;
@@ -1358,7 +1358,7 @@ function applyHit(p,a0,h){
     if(o.kind==='ink')explode(o);else{const dx=o.x-p.x,dy=o.y-p.y,d=Math.hypot(dx,dy)||1;kick(o,dx/d*950,dy/d*950)}n++;hx+=o.x;hy+=o.y}
   if(n){const heavy=h.dmg>=5;hs=Math.max(hs,heavy?.13:.06);shake=Math.max(shake,heavy?11:5+Math.min(5,n));thump(heavy);
     if(h.word)word(hx/n,hy/n,h.word);
-    if(p===P&&heavy&&combo>=14)cineShot(.75)}          // uzun kombonun bitirici darbesi
+    if(p===P&&heavy&&combo>=30)cineShot(.7)}          // uzun kombonun bitirici darbesi
   if(p===P&&P.clonesT>0&&!h.clone){const h2=Object.assign({},h,{dmg:Math.max(1,Math.round(h.dmg*.6)),clone:1,word:null});
     for(const c of clonePos(P))n+=applyHit({x:c.x,y:c.y},a0,h2)}
   return n;
@@ -2426,8 +2426,9 @@ function frame(t){
   if(state==='play'&&drawOpen&&net.mode==='solo'){/* çizerken oyun durur */}
   else if(state==='play'){bannerT-=dt;if(drawT>0)drawT-=rdt;
     if(hs>0)hs-=rdt;else{killsNow=0;bigKill=false;update(dt);
-      if(killsNow>=3||(bigKill&&killsNow>=1)){if(net.mode==='solo')slowT=.5;zp=Math.max(zp,.13);flashA=Math.max(flashA,.28);
-        if(killsNow>=4)cineShot(.85)}}
+      mkCd-=rdt;
+      if(mkCd<=0&&(killsNow>=4||(bigKill&&killsNow>=3))){mkCd=3;if(net.mode==='solo')slowT=.22;zp=Math.max(zp,.06);flashA=Math.max(flashA,.14);
+        if(killsNow>=6)cineShot(.75)}}
     netTick(rdt)}
   else if(state==='flip'){flipT+=dt;if(flipT>=.9){state='play';bannerT=2;if(pendingDraw){pendingDraw=false;openDraw()}}}
   render();
