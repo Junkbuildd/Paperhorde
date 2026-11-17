@@ -651,7 +651,7 @@ function objData(){return objs.filter(o=>!o.dead).map(o=>[o.id,OCODE[o.kind],o.x
 function beginPage(w,data,reset,flip){
   if(flip){snap.width=cv.width;snap.height=cv.height;sctx.drawImage(cv,0,0);snd(300,.5,'sawtooth',.03,500)}
   wave=w;
-  if(reset){P.hp=100;P.dead=false}else if(P.dead){P.dead=false;P.hp=60;P.inv=1.5}else P.hp=Math.min(100,P.hp+25);
+  if(reset){P.hp=100;P.dead=false;submitted=false;lastRank=0;lastNew=false;sb.err='';gameT0=performance.now();sbStart()}else if(P.dead){P.dead=false;P.hp=60;P.inv=1.5}else P.hp=Math.min(100,P.hp+25);
   drawPaper();
   zombies=[];parts=[];picks=[];fx=[];waves=[];hitq=[];spits=[];flames=[];bshots=[];pulls=[];bobjs={glue:[],tape:[],wall:[],hole:[]};P.slowT=0;P.noteT=0;P.fireT=0;P.seq='';
   objs=data.map(o=>({id:o[0],kind:OKIND[o[1]]||'ink',x:o[2],y:o[3],vx:0,vy:0,r:o[1]==='e'?26:o[1]==='p'?22:15,fuse:-1,dead:false,vis:false,
@@ -1628,7 +1628,7 @@ function onClientData(m){
     beginPage(m.wave,m.objs,true,false);$('menu').style.display='none';cv.focus();updateChip();
   }else if(m.t==='full'){menuMsg('Oda dolu (en fazla '+MAXP+' kişi).');leaveNet()}
   else if(state==='menu')return;
-  else if(m.t==='page'){score=m.score;beginPage(m.wave,m.objs,m.reset,true)}
+  else if(m.t==='page'){if(m.reset&&!submitted)submitScore();score=m.score;beginPage(m.wave,m.objs,m.reset,true)}
   else if(m.t==='e')applyEv(m.ev);
   else if(m.t==='s'){
     score=m.score;toSpawn=m.left;if(Array.isArray(m.sb))for(const q of m.sb.slice(0,20))if(Array.isArray(q))word(+q[0]||0,+q[1]||0,'+'+(q[2]|0)+' '+String(q[3]).slice(0,30),false,null,'#1f7a3a');
@@ -1660,7 +1660,7 @@ function leaveNet(){
   net.peer=null;net.hc=null;net.conns.clear();others.clear();net.mode='solo';net.id='h';net.code='';
   P.col=INK;P.sid=1;setBusy(false);updateChip();
 }
-function backToMenu(msg){if((state==='play'||state==='flip')&&net.mode!=='client'&&score>0&&!submitted)submitScore();submitted=false;if(drawOpen){drawOpen=false;$('draw').style.display='none'}pendingDraw=false;leaveNet();state='menu';$('menu').style.display='';menuMsg(msg||'')}
+function backToMenu(msg){setTimeout(sbLoad,1500);if((state==='play'||state==='flip')&&score>0&&!submitted)submitScore();submitted=false;if(drawOpen){drawOpen=false;$('draw').style.display='none'}pendingDraw=false;leaveNet();state='menu';$('menu').style.display='';menuMsg(msg||'')}
 // ---------- lobi: açık odalar + liderlik tablosu (sunucusuz) ----------
 const LOBBY_ID='paperhorde-lobby-v1',LB_KEY='ph_lb';
 const lob={peer:null,conn:null,hub:false,rooms:new Map(),list:[],board:[],hubConns:new Set(),regT:0,state:'yok'};
@@ -1678,11 +1678,26 @@ function lbClean(e){if(!e||typeof e!=='object')return null;const s2=Math.round(+
 function lbMerge(a,b){const m=new Map();for(const e of[...a,...b]){const c=lbClean(e);if(c)m.set(c.id||(c.n+c.s+c.t),c)}
   return[...m.values()].sort((x,y)=>y.s-x.s).slice(0,50)}
 function lbSet(b){lob.board=lbMerge(lob.board,b);try{localStorage.setItem(LB_KEY,JSON.stringify(lob.board))}catch(e){}renderBoard()}
-function submitScore(){if(submitted||score<=0)return;submitted=true;
+// ---------- Supabase: genel liderlik tablosu (kullanıcı adı başına en yüksek skor) ----------
+const SB_URL='https://zxktaigenwjuujrxgxis.supabase.co',SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4a3RhaWdlbndqdXVqcnhneGlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ4MzA2MDgsImV4cCI6MjExMDQwNjYwOH0.XeppMbWB28HUXcU_uYKCfA2wX5oeu2ZuIUDY5cNMOfU';
+const sb={tok:null,board:null,err:'',busy:false};
+function sbRand(n){const a=new Uint8Array(n);crypto.getRandomValues(a);return[...a].map(x=>(x%36).toString(36)).join('')}
+function sbIds(){let id,sec;try{id=localStorage.getItem('ph_pid');sec=localStorage.getItem('ph_sec')}catch(e){}
+  if(!id||!sec){id='ph-'+sbRand(20);sec=sbRand(32);try{localStorage.setItem('ph_pid',id);localStorage.setItem('ph_sec',sec)}catch(e){}}return{id,sec}}
+async function sbCall(path,body,method){const r=await fetch(SB_URL+path,{method:method||'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  const t=await r.text();let j=null;try{j=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error((j&&(j.message||j.hint))||('HTTP '+r.status));return j}
+function sbStart(){sb.tok=null;const{id,sec}=sbIds();sbCall('/rest/v1/rpc/ph_start_run',{p_player:id,p_secret:sec}).then(t=>{sb.tok=t}).catch(()=>{})}
+function sbLoad(){sbCall('/rest/v1/ph_scores?select=name,score,page,diff&order=score.desc&limit=20',null,'GET').then(r=>{if(Array.isArray(r)){sb.board=r;renderBoard()}}).catch(()=>{})}
+function sbSubmit(){const tok=sb.tok;sb.tok=null;if(!tok||score<=0)return;const{id,sec}=sbIds();sb.err='';
+  sbCall('/rest/v1/rpc/ph_submit_run',{p_token:tok,p_player:id,p_secret:sec,p_name:P.name||'Oyuncu',p_score:score,p_page:wave,p_diff:DIFFK})
+    .then(r=>{if(r&&r.rank){lastRank=r.rank;lastBest=r.best;lastNew=!!r.new}sbLoad()})
+    .catch(e=>{sb.err=String(e.message||e).slice(0,80)})}
+let lastBest=0,lastNew=false;
+function submitScore(){if(submitted||score<=0)return;submitted=true;sbSubmit();
   const names=[P.name||'Oyuncu',...[...others.values()].map(o=>o.name||'Oyuncu')].join(' + ');
   const e={n:names,s:score,w:wave,d:DIFFK,t:Date.now(),u:Math.round((performance.now()-(gameT0||performance.now()))/1000),id:Math.random().toString(36).slice(2,12)};
   if(!lbPlausible(e)){submitted=true;return}
-  lbSet([e]);lastRank=lob.board.findIndex(q=>q.id===e.id)+1;
+  lbSet([e]);if(!lastRank)lastRank=0;
   if(lob.hub)hubBroadcast({t:'board',board:lob.board});else if(lob.conn&&lob.conn.open)lob.conn.send({t:'score',e})}
 function hubBroadcast(m){for(const c of lob.hubConns)try{if(c.open)c.send(m)}catch(e){}}
 function hubRooms(){const now=Date.now();for(const[k,r]of lob.rooms)if(now-r.t>12000)lob.rooms.delete(k);
@@ -1723,6 +1738,12 @@ function renderRooms(){const el=$('rooms');if(!el)return;el.innerHTML='';
     const b=document.createElement('button');const full=r.n>=r.max;b.textContent=full?'Dolu':'Katıl';b.disabled=full;
     b.onclick=()=>{$('code').value=r.code;$('bJoin').click()};row.append(info,b);el.appendChild(row)}}
 function renderBoard(){const el=$('lbList');if(!el)return;el.innerHTML='';
+  if(sb.board){if(!sb.board.length){const p=document.createElement('p');p.className='sub';p.textContent='Henüz skor yok. İlk sen ol!';el.appendChild(p);return}
+    const me=(P.name||'').toLowerCase();
+    sb.board.forEach((e,i)=>{const row=document.createElement('div');row.className='lrow';if(String(e.name).toLowerCase()===me)row.style.background='rgba(194,38,48,.1)';
+      const a=document.createElement('b');a.textContent=(i+1)+'.';const n=document.createElement('span');n.textContent=e.name;
+      const m=document.createElement('i');m.textContent='Sayfa '+e.page+' • '+(DIFFS[e.diff]||DIFFS.normal).name;const sc=document.createElement('b');sc.textContent=(+e.score).toLocaleString('tr-TR');
+      row.append(a,n,m,sc);el.appendChild(row)});return}
   if(!lob.board.length){const p=document.createElement('p');p.className='sub';p.textContent='Henüz skor yok. İlk sen ol!';el.appendChild(p);return}
   lob.board.slice(0,20).forEach((e,i)=>{const row=document.createElement('div');row.className='lrow';
     const a=document.createElement('b');a.textContent=(i+1)+'.';const n=document.createElement('span');n.textContent=e.n;
@@ -2393,7 +2414,8 @@ function hud(){
     ctx.fillStyle='rgba(251,247,234,.88)';ctx.fillRect(vw/2-260,vh/2-130,520,250);
     txt('SİLİNDİN!',vw/2,vh/2-50,82,'#c22630','center');
     txt('Sayfa '+wave+'  •  Skor '+score+'  •  Rekor '+best,vw/2,vh/2+5,30,INK,'center');
-    if(lastRank)txt('Liderlik tablosunda '+lastRank+'. sıra',vw/2,vh/2+40,26,'#1f7a3a','center');
+    if(sb.err)txt(sb.err.indexOf('isim')>=0?'Bu isim başka oyuncuya ait, menüden farklı bir isim seç':'Skor kaydedilemedi: '+sb.err,vw/2,vh/2+40,20,'#c22630','center');
+    else if(lastRank)txt((lastNew?'Yeni rekor! ':'En iyin '+lastBest+' • ')+'Genel sıralamada '+lastRank+'. sıra',vw/2,vh/2+40,24,'#1f7a3a','center');
     txt('Tekrar için tıkla',vw/2,vh/2+82,30,'#333','center');
   }else if(P.dead){
     ctx.fillStyle='rgba(251,247,234,.88)';ctx.fillRect(vw/2-300,vh/2-90,600,150);
@@ -2512,7 +2534,8 @@ try{setBand(localStorage.getItem('dz_band')||BAND)}catch(e){setBand(BAND)}
 $('dens').addEventListener('input',e=>setDens(e.target.value));
 try{setDens(localStorage.getItem('dz_dens')||1)}catch(e){setDens(1)}
 lob.board=lbMerge([],lbLocal());renderBoard();renderRooms();
-$('bLb').addEventListener('click',()=>{const el=$('lbBox');el.style.display=el.style.display==='none'?'':'none';renderBoard()});
+$('bLb').addEventListener('click',()=>{const el=$('lbBox');el.style.display=el.style.display==='none'?'':'none';renderBoard();sbLoad()});
+sbLoad();
 setTimeout(lobbyStart,300);
 $('bHost').addEventListener('click',()=>{initAudio();readName();leaveNet();hostRoom(0)});
 $('bJoin').addEventListener('click',()=>{initAudio();readName();leaveNet();joinRoom($('code').value)});
