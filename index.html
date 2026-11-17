@@ -45,6 +45,20 @@ canvas{display:block;width:100%;height:100%;cursor:none;outline:none}
 #dtimer{color:#c22630;font-size:20px;min-height:24px}
 #copy{position:fixed;top:10px;left:50%;transform:translateX(-50%);font-size:18px;padding:3px 12px;display:none}
 </style>
+<style>
+#pz{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(251,247,234,.86);z-index:50}
+#pz.on{display:flex}
+#pzb{background:#fff;border:2.5px solid #1b2a6b;border-radius:14px;padding:18px 22px;min-width:260px;max-width:340px;font:16px Georgia,serif;color:#1b2a6b;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+#pzb h2{margin:0 0 6px;font-size:22px}
+#pzb .code{font-size:15px;margin:0 0 10px;color:#555}
+#pzb ul{list-style:none;margin:0 0 12px;padding:0;border-top:1.5px dashed #9aa6c8}
+#pzb li{padding:6px 2px;border-bottom:1.5px dashed #c9d0e6;display:flex;justify-content:space-between}
+#pzb li i{color:#888;font-style:normal;font-size:13px}
+#pzb .row2{display:flex;gap:8px}
+#pzb button{flex:1;font:16px Georgia,serif;padding:8px;border:2px solid #1b2a6b;border-radius:8px;background:#fff;color:#1b2a6b;cursor:pointer}
+#pzb button.red{background:#c22630;color:#fff;border-color:#c22630}
+#menuBtn{position:fixed;top:10px;right:10px;z-index:40;font:14px Georgia,serif;padding:5px 10px;border:2px solid #1b2a6b;border-radius:8px;background:#fff;color:#1b2a6b;cursor:pointer;display:none}
+</style>
 </head>
 <body>
 <canvas id="c" tabindex="0"></canvas>
@@ -2289,6 +2303,7 @@ function drawFlip(){
 // ---------- döngü ----------
 let last=0;
 function frame(t){
+  if(window.__paused){const pd=Math.min(.033,(t-last)/1000||0);last=t;if(net.mode!=='solo'&&(state==='play'||state==='dead'))netTick(pd);render();requestAnimationFrame(frame);return}
   const rdt=Math.min(.033,(t-last)/1000||0)*(window.__slow||1);last=t;
   if(slowT>0){slowT-=rdt;tscale=.28}else tscale=1;
   const dt=rdt*tscale;time+=dt;fdt=dt;
@@ -2356,6 +2371,7 @@ window.addEventListener('keydown',e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
   if(e.repeat)return;K[e.code]=true;
   if(e.code==='ShiftLeft'||e.code==='ShiftRight')K._dash=true;
+  if(e.code==='Escape'){e.preventDefault();togglePause();return}
   if(e.code==='Space')press('j');
   if(e.code==='KeyJ')press('p');
   if(e.code==='KeyK')press('k');
@@ -2383,8 +2399,27 @@ try{const q=new URLSearchParams(location.search).get('oda');if(q){$('code').valu
 M.x=VW/2;M.y=VH/2;drawPaper();
 if(document.fonts&&document.fonts.load)document.fonts.load(F(30)).then(()=>{if(state==='menu')drawPaper()}).catch(()=>{});
 requestAnimationFrame(frame);
-window.__dz={P,M,K,net,others,MV,MOCM,press,trySkill,startAct,cineShot,setHit:n=>{hitN=n;hitT=1.4;hitPop=1},cineT:()=>cine.t,dbgStats:()=>wStats(drawType,strokes.map(st=>{const a=[];for(const q of st)a.push(clamp(Math.round(q[0]/BOXW*255),0,255),clamp(Math.round(q[1]/BOXH*255),0,255));return a})),get state(){return state},get zombies(){return zombies},get wave(){return wave},get score(){return score},get objs(){return objs},get pools(){return pools},BOSS,bossHit,bossShot,bossRect,bossObj,get bobjs(){return bobjs},assnTarget,picksN:()=>picks.length,dbgStrokes:()=>strokes.reduce((t,q)=>t+q.length,0),get bshots(){return bshots},clearWave:()=>{toSpawn=0;for(const z of zombies)z.dead=true;zombies=[]},mkZombie,hurtDbg:hurt,get spits(){return spits},dbg:()=>({toSpawn,hostWait,bossUp,bossDone,bossT:+bossT.toFixed(1),localDone,drawT:+drawT.toFixed(1),spawnT:+spawnT.toFixed(1)})};
+window.__dz={backToMenu,P,M,K,net,others,MV,MOCM,press,trySkill,startAct,cineShot,setHit:n=>{hitN=n;hitT=1.4;hitPop=1},cineT:()=>cine.t,dbgStats:()=>wStats(drawType,strokes.map(st=>{const a=[];for(const q of st)a.push(clamp(Math.round(q[0]/BOXW*255),0,255),clamp(Math.round(q[1]/BOXH*255),0,255));return a})),get state(){return state},get zombies(){return zombies},get wave(){return wave},get score(){return score},get objs(){return objs},get pools(){return pools},BOSS,bossHit,bossShot,bossRect,bossObj,get bobjs(){return bobjs},assnTarget,picksN:()=>picks.length,dbgStrokes:()=>strokes.reduce((t,q)=>t+q.length,0),get bshots(){return bshots},clearWave:()=>{toSpawn=0;for(const z of zombies)z.dead=true;zombies=[]},mkZombie,hurtDbg:hurt,get spits(){return spits},dbg:()=>({toSpawn,hostWait,bossUp,bossDone,bossT:+bossT.toFixed(1),localDone,drawT:+drawT.toFixed(1),spawnT:+spawnT.toFixed(1)})};
 })();
+</script>
+<button id="menuBtn">☰ Menü (Esc)</button>
+<div id="pz"><div id="pzb"><h2>Duraklatıldı</h2><p class="code" id="pzCode"></p><ul id="pzList"></ul>
+<div class="row2"><button id="pzGo">Devam et</button><button id="pzMenu" class="red">Menüye dön</button></div></div></div>
+<script>
+let paused=false,pzTimer=null;
+function refreshPz(){const d=window.__dz;if(!d)return;const list=document.getElementById('pzList');
+  const names=[[d.P.name||'Oyuncu','(sen)']];
+  for(const o of d.others.values())names.push([o.name||'Oyuncu','']);
+  list.innerHTML='';for(const [n,tag] of names){const li=document.createElement('li');const a=document.createElement('span');a.textContent=n;const b=document.createElement('i');b.textContent=tag;li.append(a,b);list.appendChild(li)}
+  document.getElementById('pzCode').textContent=d.net.mode==='solo'?'Tek başına oynuyorsun':'Oda kodu: '+d.net.code+' • '+names.length+' oyuncu';
+}
+function setPause(on){const d=window.__dz;if(!d)return;if(on&&!(d.state==='play'||d.state==='dead'))return;paused=on;window.__paused=on;
+  document.getElementById('pz').classList.toggle('on',on);if(on){refreshPz();clearInterval(pzTimer);pzTimer=setInterval(refreshPz,500)}else clearInterval(pzTimer)}
+window.togglePause=()=>setPause(!paused);
+document.getElementById('menuBtn').onclick=()=>setPause(!paused);
+document.getElementById('pzGo').onclick=()=>setPause(false);
+document.getElementById('pzMenu').onclick=()=>{setPause(false);window.__dz.backToMenu('')};
+setInterval(()=>{const d=window.__dz;if(!d)return;document.getElementById('menuBtn').style.display=(d.state==='play'||d.state==='dead'||d.state==='flip')?'':'none'},300);
 </script>
 </body>
 </html>
