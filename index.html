@@ -169,7 +169,7 @@ const thump=heavy=>{snd(heavy?95:140,heavy?.14:.08,'square',.05,-50);if(heavy)sn
 
 // ---------- durum ----------
 let bossUp=false,bossDone=false,bossT=0;
-const MAXP=3;
+const MAXP=2;
 const DIFFS={easy:{cnt:.6,hp:.7,boss:.75,mult:.7,name:'Kolay'},normal:{cnt:1,hp:1,boss:1,mult:1,name:'Normal'},hard:{cnt:1.45,hp:1.35,boss:1.3,mult:1.5,name:'Zor'}};
 let DIFF=DIFFS.normal,DIFFK='normal',DENS=1;
 function setDens(v){DENS=clamp(Math.round((+v||1)*4)/4,.5,3);try{localStorage.setItem('dz_dens',DENS)}catch(e){}const sl=$('dens');if(sl)sl.value=DENS;const t=$('densV');if(t)t.textContent='×'+DENS+(DENS>=2.5?' (çok kalabalık)':DENS<=.75?' (seyrek)':'')}
