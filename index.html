@@ -115,8 +115,8 @@ canvas{display:block;width:100%;height:100%;cursor:none;outline:none}
   <div class="row" id="dkRow"><button data-d="easy">Kolay</button><button data-d="normal">Normal</button><button data-d="hard">Zor</button></div>
 <div class="row"><button id="bSolo">Tek başına oyna</button><button id="bHost">Oda kur</button></div>
   <p class="sub" id="padInfo" style="display:none">🎮 Oyun kolu bağlı — Options/Start: duraklat ve menü · A: zıpla · X: yumruk · B: tekme · Y: kafa · LB: silahı al · RB: atıl · tetikler ve yön tuşları: ninja hareketleri</p>
-  <div class="row"><input id="code" maxlength="4" placeholder="KOD"><button id="bJoin">Odaya katıl</button></div>
-  <div id="roomBox"><h3>Açık odalar</h3><div id="rooms"></div></div>
+  <div class="row" style="display:none"><input id="code" maxlength="4" placeholder="KOD"><button id="bJoin">Odaya katıl</button></div>
+  <div id="roomBox"><h3>Açık odalar <button id="bQuick" style="font-size:15px;padding:3px 10px;margin-left:8px">⚡ Hızlı katıl</button></h3><div id="rooms"></div></div>
   <div class="row"><button id="bLb">🏆 Liderlik tablosu</button></div>
   <div id="lbBox" style="display:none"><div id="lbList"></div></div>
   <p id="msg"></p>
@@ -2137,7 +2137,7 @@ function lbMerge(a,b){const m=new Map();for(const e of[...a,...b]){const c=lbCle
 function lbSet(b){lob.board=lbMerge(lob.board,b);try{localStorage.setItem(LB_KEY,JSON.stringify(lob.board))}catch(e){}renderBoard()}
 // ---------- Supabase: genel liderlik tablosu (kullanıcı adı başına en yüksek skor) ----------
 const SB_URL='https://zxktaigenwjuujrxgxis.supabase.co',SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4a3RhaWdlbndqdXVqcnhneGlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ4MzA2MDgsImV4cCI6MjExMDQwNjYwOH0.XeppMbWB28HUXcU_uYKCfA2wX5oeu2ZuIUDY5cNMOfU';
-const sb={tok:null,board:null,err:'',busy:false};
+const sb={tok:null,board:null,err:'',busy:false,rooms:null,roomT:0,beatT:0};
 function sbRand(n){const a=new Uint8Array(n);crypto.getRandomValues(a);return[...a].map(x=>(x%36).toString(36)).join('')}
 function sbIds(){let id,sec;try{id=localStorage.getItem('ph_pid');sec=localStorage.getItem('ph_sec')}catch(e){}
   if(!id||!sec){id='ph-'+sbRand(20);sec=sbRand(32);try{localStorage.setItem('ph_pid',id);localStorage.setItem('ph_sec',sec)}catch(e){}}return{id,sec}}
@@ -2181,19 +2181,27 @@ function lobbyJoin(){let pr;try{pr=mkPeer()}catch(e){return}lob.peer=pr;
   pr.on('error',e=>{if(e&&e.type==='peer-unavailable'){lobbyRetry()}})}
 function lobbyRetry(){try{if(lob.peer)lob.peer.destroy()}catch(e){}lob.peer=null;lob.conn=null;lob.hub=false;lob.hubConns.clear();lob.rooms.clear();
   setTimeout(lobbyStart,600+Math.random()*2400)}
-function lobbyTick(dt){lob.regT-=dt;if(lob.regT>0)return;lob.regT=3;
+function sbRoomsTick(dt){
+  sb.roomT-=dt;if(sb.roomT<=0&&state==='menu'){sb.roomT=5;sbCall('/rest/v1/rpc/ph_rooms_open',{}).then(r=>{if(Array.isArray(r)){sb.rooms=r;renderRooms()}}).catch(()=>{})}
+  sb.beatT-=dt;if(sb.beatT<=0){sb.beatT=8;if(net.mode==='host'&&net.code){const{id,sec}=sbIds();
+    sbCall('/rest/v1/rpc/ph_room_beat',{p_player:id,p_secret:sec,p_code:net.code,p_host:P.name||'Oyuncu',p_n:1+others.size,p_max:MAXP,p_wave:wave,p_diff:DIFFK,p_dens:DENS}).catch(()=>{})}}}
+function lobbyTick(dt){sbRoomsTick(dt);lob.regT-=dt;if(lob.regT>0)return;lob.regT=3;
   if(lob.hub)hubRooms();
   const reg=net.mode==='host'&&net.code?{t:'reg',code:net.code,host:P.name||'Oyuncu',n:1+others.size,wave,d:DIFFK,x:DENS}:null;
   if(reg){if(lob.hub){lob.rooms.set(reg.code,Object.assign({t:Date.now(),c:null,max:MAXP},reg));hubRooms();hubBroadcast({t:'rooms',list:lob.list})}
     else if(lob.conn&&lob.conn.open)lob.conn.send(reg)}}
-function lobbyUnreg(code){if(!code)return;if(lob.hub){lob.rooms.delete(code);hubRooms();hubBroadcast({t:'rooms',list:lob.list})}else if(lob.conn&&lob.conn.open)lob.conn.send({t:'unreg',code})}
+function lobbyUnreg(code){if(!code)return;{const{id,sec}=sbIds();sbCall('/rest/v1/rpc/ph_room_close',{p_player:id,p_secret:sec,p_code:code}).catch(()=>{})}if(lob.hub){lob.rooms.delete(code);hubRooms();hubBroadcast({t:'rooms',list:lob.list})}else if(lob.conn&&lob.conn.open)lob.conn.send({t:'unreg',code})}
+let quickL=[];
 function renderRooms(){const el=$('rooms');if(!el)return;el.innerHTML='';
-  const L=lob.list.filter(r=>r.code!==net.code);
-  if(!L.length){const p=document.createElement('p');p.className='sub';p.textContent=lob.state==='hazır'?'Şu an açık oda yok. İlk odayı sen kur!':lob.state==='bağlanıyor'?'Odalar aranıyor…':'Oda listesi alınamadı (bu tarayıcıda çok oyunculu çalışmıyor olabilir).';el.appendChild(p);return}
+  const mp=new Map();for(const r of lob.list)mp.set(r.code,r);
+  for(const r of sb.rooms||[])if(!mp.has(r.code))mp.set(r.code,{code:r.code,host:r.host,n:r.n,max:r.mx,wave:r.wave,d:r.diff,x:r.dens});
+  const L=[...mp.values()].filter(r=>r.code!==net.code);quickL=L;
+  if(!L.length){const p=document.createElement('p');p.className='sub';p.textContent=(lob.state==='hazır'||sb.rooms)?'Şu an açık oda yok. İlk odayı sen kur!':lob.state==='bağlanıyor'?'Odalar aranıyor…':'Oda listesi alınamadı (bu tarayıcıda çok oyunculu çalışmıyor olabilir).';el.appendChild(p);return}
   for(const r of L){const row=document.createElement('div');row.className='rrow';const info=document.createElement('span');
     info.textContent=r.host+' • '+r.n+'/'+r.max+' kişi • Sayfa '+r.wave+' • '+(DIFFS[r.d]||DIFFS.normal).name+' • yoğunluk ×'+(+r.x||1);
     const b=document.createElement('button');const full=r.n>=r.max;b.textContent=full?'Dolu':'Katıl';b.disabled=full;
     b.onclick=()=>{$('code').value=r.code;$('bJoin').click()};row.append(info,b);el.appendChild(row)}}
+document.getElementById('bQuick').addEventListener('click',()=>{const r=quickL.find(r=>r.n<r.max);if(!r){menuMsg('Şu an katılınacak açık oda yok. Oda kur, arkadaşın listede görüp katılsın.');return}$('code').value=r.code;$('bJoin').click()});
 function renderBoard(){const el=$('lbList');if(!el)return;el.innerHTML='';
   if(sb.board){if(!sb.board.length){const p=document.createElement('p');p.className='sub';p.textContent='Henüz skor yok. İlk sen ol!';el.appendChild(p);return}
     const me=(P.name||'').toLowerCase();
@@ -3081,7 +3089,7 @@ let paused=false,pzTimer=null;
 function refreshPz(){const d=window.__ph;if(!d)return;const list=document.getElementById('pzList');
   const names=d.names().map((n,i)=>[n,i?'':'(sen)']);
   list.innerHTML='';for(const [n,tag] of names){const li=document.createElement('li');const a=document.createElement('span');a.textContent=n;const b=document.createElement('i');b.textContent=tag;li.append(a,b);list.appendChild(li)}
-  document.getElementById('pzCode').textContent=d.mode==='solo'?'Tek başına oynuyorsun':'Oda kodu: '+d.code+' • '+names.length+' oyuncu';
+  document.getElementById('pzCode').textContent=d.mode==='solo'?'Tek başına oynuyorsun':'Açık oda • isteyen katılabilir • '+names.length+' oyuncu';
 }
 function setPause(on){const d=window.__ph;if(!d)return;if(on&&!(d.state==='play'||d.state==='dead'))return;paused=on;window.__paused=on;
   document.getElementById('pz').classList.toggle('on',on);if(on){refreshPz();clearInterval(pzTimer);pzTimer=setInterval(refreshPz,500)}else clearInterval(pzTimer)}
